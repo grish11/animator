@@ -26,9 +26,10 @@ pub fn mount(text: String, on_change: fn(String) -> msg) -> Effect(msg) {
 // ── View ──────────────────────────────────────────────────────────────────────
 
 /// The code panel that sits beside the drawing: the live editor and a reference
-/// of the built-in inputs and functions. The latest code that runs is rendered
-/// continuously, so there is no explicit apply step.
-pub fn view_panel(on_collapse: msg) -> Element(msg) {
+/// of the built-in inputs and functions. `toolbar` sits under the title and above
+/// the editor (the drawing <select> goes here). The latest code that runs is
+/// rendered continuously, so there is no explicit apply step.
+pub fn view_panel(on_collapse: msg, toolbar: Element(msg)) -> Element(msg) {
   html.div([attr.class("code-panel")], [
     html.div([attr.class("code-header")], [
       html.span([attr.class("code-title")], [html.text("draw code")]),
@@ -41,6 +42,7 @@ pub fn view_panel(on_collapse: msg) -> Element(msg) {
         [html.text("⟨")],
       ),
     ]),
+    toolbar,
     // The editor fills this wrapper.
     html.div([attr.class("code-editor-wrap")], [
       // CodeMirror mounts into this node (see mount). It is rendered as
