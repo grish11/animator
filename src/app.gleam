@@ -156,7 +156,7 @@ fn view_reset_button() -> Element(Msg) {
       attr.attribute("title", "Restart animation"),
       event.on_click(ResetClock),
     ],
-    [html.text("↺")],
+    [html.text("Reset Animation: ↺")],
   )
 }
 
