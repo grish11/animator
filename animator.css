@@ -148,30 +148,42 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
   container-type: size;
 }
 
-/* The interpreter's List(Path) (or its error), shown as text before the
-   animation pane is built. */
-.output {
-  align-self: stretch;
-  margin: 0;
-  padding: 16px;
-  overflow: auto;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #cfe3ff;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-/* Leave room for the reveal button, which only overlays this pane while the
-   code column is hidden. */
-.app.code-hidden .output { padding-top: 48px; }
-
 /* Button that reveals the code column again when it is hidden. */
 .reveal-code {
   position: absolute;
   top: 12px;
   left: 12px;
   z-index: 10;
+}
+
+/* Restart the current drawing from an empty canvas. */
+.reset-clock {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+}
+
+/* Short parse/eval message over the canvas. */
+.error-box {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 11;
+  max-width: min(420px, 80%);
+  padding: 14px 18px;
+  border: 1px solid #c44;
+  border-radius: 6px;
+  background: rgba(80, 16, 16, 0.92);
+  color: #ffd0d0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 /* A centred square that fits the (possibly non-square) animation area. Give your

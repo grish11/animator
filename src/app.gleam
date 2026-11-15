@@ -4,8 +4,9 @@ import builtins
 import drawing
 import editor
 import errors
+import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/result
-import gleam/string
 import lustre
 import lustre/attribute as attr
 import lustre/effect.{type Effect}
@@ -13,6 +14,7 @@ import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
 import parser
+import render
 import shape.{type Path}
 
 /// Your app's public address, once you've deployed it in Problem 13, such as
@@ -30,6 +32,9 @@ pub const include_video_in_gallery = False
 
 const default_code = "fn draw(shape_slider: Int) -> List(Path) {\n  [Path(Line(Point(0, 0), Point(100, 100)), 0, 10, 2)]\n}\n"
 
+/// Stroke colour for every path until the app gains per-path colouring.
+const path_color = "#e8d8b0"
+
 // ── Model ──────────────────────────────────────────────────────────────────────
 
 pub type Model {
@@ -38,7 +43,8 @@ pub type Model {
     source: String,
     // Whether the code editor is shown.
     code_open: Bool,
-    output: String,
+    // Parse/eval error to show over the canvas, if any.
+    error: Option(String),
   )
 }
 
@@ -47,13 +53,16 @@ pub type Msg {
 
   // Layout controls
   ToggleCode
+
+  // Restart the current drawing from an empty canvas.
+  ResetClock
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────────
 
 pub fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
   #(
-    Model(source: "", code_open: True, output: ""),
+    Model(source: "", code_open: True, error: None),
     // Effects that happen automatically at the start go here.
     effect.batch([
       editor.mount(default_code, SetCode),
@@ -74,23 +83,37 @@ fn run_source(shape_slider: Int, source: String) -> Result(List(Path), String) {
   }
 }
 
+/// Push paths to the canvas at normal speed and restart the clock so the
+/// drawing animates from the beginning.
+fn animate_paths(paths: List(Path)) -> Effect(Msg) {
+  let rendered = list.map(paths, fn(path) { render.render_path(path, path_color) })
+  effect.from(fn(_dispatch) {
+    render.set_drawing(rendered)
+    render.set_speed(1.0)
+    render.reset_clock()
+  })
+}
+
 // ── Update ─────────────────────────────────────────────────────────────────────
 
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
     ToggleCode -> #(Model(..model, code_open: !model.code_open), effect.none())
 
-    // After each keystroke in the editor, evaluate user code and report errors.
+    ResetClock -> #(
+      model,
+      effect.from(fn(_dispatch) { render.reset_clock() }),
+    )
+
+    // After each keystroke in the editor, evaluate user code and draw paths.
     SetCode(text) ->
       case run_source(10, text) {
-        // Parsed and evaluated: show the result.
         Ok(paths) -> #(
-          Model(..model, output: string.inspect(paths), source: text),
-          effect.none(),
+          Model(..model, source: text, error: None),
+          animate_paths(paths),
         )
-        // Broken (parse or evaluation): show the error.
         Error(msg) -> #(
-          Model(..model, output: msg, source: text),
+          Model(..model, source: text, error: Some(msg)),
           effect.none(),
         )
       }
@@ -120,8 +143,29 @@ pub fn view(model: Model) -> Element(Msg) {
 fn view_anim(model: Model) -> Element(Msg) {
   html.div([attr.class("canvas-area")], [
     view_reveal_code(model),
-    html.pre([attr.class("output")], [html.text(model.output)]),
+    view_reset_button(),
+    html.canvas([attr.id("animation-canvas"), attr.class("canvas")]),
+    view_error(model),
   ])
+}
+
+fn view_reset_button() -> Element(Msg) {
+  html.button(
+    [
+      attr.class("icon-btn reset-clock"),
+      attr.attribute("title", "Restart animation"),
+      event.on_click(ResetClock),
+    ],
+    [html.text("↺")],
+  )
+}
+
+fn view_error(model: Model) -> Element(Msg) {
+  case model.error {
+    None -> element.none()
+    Some(msg) ->
+      html.div([attr.class("error-box")], [html.text(msg)])
+  }
 }
 
 // The button that brings the code column back, overlaid on the top-left of the
