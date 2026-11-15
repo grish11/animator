@@ -34,7 +34,8 @@ pub const video_url = ""
 /// Set to True if you would like your video included in the course gallery.
 pub const include_video_in_gallery = False
 
-const default_code = "fn draw(shape_slider: Int) -> List(Path) {\n  [Path(Line(Point(0, 0), Point(100, 100)), 0, 10, 2)]\n}\n"
+const default_code =
+  "fn draw(shape_slider: Int) -> List(Path) {\n  [Path(Line(Point(0, 0), Point(100, 100)), 0, 10, 2)]\n}\n"
 
 /// Sentinel <option> value that opens the new-drawing name prompt.
 /// Gradescope treats every non-empty option value as a drawing, so this must be "".
@@ -181,7 +182,8 @@ fn run_source(shape_slider: Int, source: String) -> Result(List(Path), String) {
 /// (used when only the shape slider moves). Does not touch speed — shape changes
 /// must call set_drawing alone so Gradescope can tell them apart from speed edits.
 fn push_drawing(paths: List(Path), restart: Bool) -> Effect(Msg) {
-  let rendered = list.map(paths, fn(path) { render.render_path(path, path_color) })
+  let rendered =
+    list.map(paths, fn(path) { render.render_path(path, path_color) })
   effect.from(fn(_dispatch) {
     render.set_drawing(rendered)
     case restart {
@@ -476,8 +478,7 @@ fn view_slider_row(
 fn view_error(model: Model) -> Element(Msg) {
   case model.error {
     None -> element.none()
-    Some(msg) ->
-      html.div([attr.class("error-box")], [html.text(msg)])
+    Some(msg) -> html.div([attr.class("error-box")], [html.text(msg)])
   }
 }
 
