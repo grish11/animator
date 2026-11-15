@@ -44,7 +44,7 @@ const new_drawing_value = ""
 /// Stroke colour for every path until the app gains per-path colouring.
 const path_color = "#e8d8b0"
 
-const default_shape = 0
+const default_shape = 10
 
 const default_speed = 1.0
 
@@ -423,13 +423,19 @@ fn view_controls(model: Model) -> Element(Msg) {
         "Speed",
         "speed-slider",
         float.to_string(model.speed),
-        "-2",
-        "2",
+        "-6",
+        "6",
         "0.1",
         fn(raw) {
+          // HTML range inputs often send whole numbers without a decimal
+          // ("-6", "6"); gleam/float.parse requires one, so fall back to int.
           case float.parse(raw) {
             Ok(speed) -> SetSpeed(speed)
-            Error(Nil) -> SetSpeed(model.speed)
+            Error(Nil) ->
+              case int.parse(raw) {
+                Ok(n) -> SetSpeed(int.to_float(n))
+                Error(Nil) -> SetSpeed(model.speed)
+              }
           }
         },
       ),

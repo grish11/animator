@@ -43,9 +43,18 @@ export function setDrawing(pathList) {
   }
   // Keep the current clock across drawing swaps: dragging the shape slider on an
   // already-finished drawing shows the new shape complete, rather than restarting.
+  // When the new drawing is longer, jump to its end so a finished piece does not
+  // keep animating the extra paths; mid-animation swaps keep the same time.
   // `endClock` is the moment the last path finishes drawing, past which the frame
   // loop holds time still (see frame).
+  const wasFinished =
+    drawing != null && Number.isFinite(drawing.endClock) && clock >= drawing.endClock;
   drawing = { paths, endClock: drawingEndClock(paths) };
+  if (wasFinished && Number.isFinite(drawing.endClock)) {
+    clock = drawing.endClock;
+  } else {
+    clock = clamp(clock, 0, drawing.endClock);
+  }
   if (!running) {
     running = true;
     lastTs = performance.now();
