@@ -20,6 +20,7 @@ import lustre/event
 import parser
 import render
 import shape.{type Path}
+import pane_split
 
 /// Your app's public address, once you've deployed it in Problem 13, such as
 /// "https://your-username.github.io/animator/".
@@ -41,12 +42,19 @@ const default_code =
 /// Gradescope treats every non-empty option value as a drawing, so this must be "".
 const new_drawing_value = ""
 
-/// Stroke colour for every path until the app gains per-path colouring.
-const path_color = "#e8d8b0"
+/// Default stroke colours: even-index paths use primary, odd-index use secondary.
+const default_primary = "#e8d8b0"
+const default_secondary = "#8a8aca"
 
 const default_shape = 10
 
 const default_speed = 1.0
+
+/// CodeMirror keybinding style for the draw editor.
+pub type EditorMode {
+  Regular
+  Neovim
+}
 
 // ── Model ──────────────────────────────────────────────────────────────────────
 
@@ -68,6 +76,11 @@ pub type Model {
     shape_slider: Int,
     // Playback rate passed to render.set_speed (negative plays backward).
     speed: Float,
+    // Regular (default) or Neovim (hjkl / vim) keybindings in the code editor.
+    editor_mode: EditorMode,
+    // Stroke colours: even path index → primary, odd → secondary.
+    primary_color: String,
+    secondary_color: String,
   )
 }
 
@@ -81,12 +94,17 @@ pub type Msg {
   // Drawing library
   SelectDrawing(String)
 
+  // Code editor keybindings: Regular or Neovim
+  SetEditorMode(EditorMode)
+
   // Playback controls
   ResetPlayback
   Play
   Pause
   SetShape(Int)
   SetSpeed(Float)
+  SetPrimaryColor(String)
+  SetSecondaryColor(String)
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────────
@@ -120,10 +138,27 @@ pub fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
       error: None,
       shape_slider: default_shape,
       speed: default_speed,
+      editor_mode: Regular,
+      primary_color: default_primary,
+      secondary_color: default_secondary,
     ),
     // Effects that happen automatically at the start go here.
-    load_drawing(source),
+    effect.batch([load_drawing(source), pane_split.mount()]),
   )
+}
+
+fn editor_mode_value(mode: EditorMode) -> String {
+  case mode {
+    Regular -> "regular"
+    Neovim -> "neovim"
+  }
+}
+
+fn parse_editor_mode(raw: String) -> EditorMode {
+  case raw {
+    "neovim" -> Neovim
+    _ -> Regular
+  }
 }
 
 fn drawing_source(
@@ -181,9 +216,20 @@ fn run_source(shape_slider: Int, source: String) -> Result(List(Path), String) {
 /// start so the drawing animates from empty; otherwise keep the current time
 /// (used when only the shape slider moves). Does not touch speed — shape changes
 /// must call set_drawing alone so Gradescope can tell them apart from speed edits.
-fn push_drawing(paths: List(Path), restart: Bool) -> Effect(Msg) {
+fn push_drawing(
+  paths: List(Path),
+  primary: String,
+  secondary: String,
+  restart: Bool,
+) -> Effect(Msg) {
   let rendered =
-    list.map(paths, fn(path) { render.render_path(path, path_color) })
+    list.index_map(paths, fn(path, i) {
+      let color = case i % 2 == 0 {
+        True -> primary
+        False -> secondary
+      }
+      render.render_path(path, color)
+    })
   effect.from(fn(_dispatch) {
     render.set_drawing(rendered)
     case restart {
@@ -191,6 +237,10 @@ fn push_drawing(paths: List(Path), restart: Bool) -> Effect(Msg) {
       False -> Nil
     }
   })
+}
+
+fn push_model_drawing(model: Model, paths: List(Path), restart: Bool) -> Effect(Msg) {
+  push_drawing(paths, model.primary_color, model.secondary_color, restart)
 }
 
 fn set_speed_effect(speed: Float) -> Effect(Msg) {
@@ -206,6 +256,11 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     ToggleControls -> #(
       Model(..model, controls_open: !model.controls_open),
       effect.none(),
+    )
+
+    SetEditorMode(mode) -> #(
+      Model(..model, editor_mode: mode),
+      editor.set_keymap(editor_mode_value(mode)),
     )
 
     SelectDrawing(choice) ->
@@ -278,16 +333,32 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         Ok(paths) -> #(
           Model(..model, shape_slider: shape, error: None),
           // Keep the clock; do not call set_speed.
-          push_drawing(paths, False),
+          push_model_drawing(model, paths, False),
         )
         Error(msg) -> #(
           Model(..model, shape_slider: shape, error: Some(msg)),
           // Broken code: show the error and draw nothing.
-          push_drawing([], False),
+          push_model_drawing(model, [], False),
         )
       }
 
     SetSpeed(speed) -> #(Model(..model, speed: speed), set_speed_effect(speed))
+
+    SetPrimaryColor(color) -> {
+      let model = Model(..model, primary_color: color)
+      case run_source(model.shape_slider, model.source) {
+        Ok(paths) -> #(model, push_model_drawing(model, paths, False))
+        Error(_) -> #(model, push_model_drawing(model, [], False))
+      }
+    }
+
+    SetSecondaryColor(color) -> {
+      let model = Model(..model, secondary_color: color)
+      case run_source(model.shape_slider, model.source) {
+        Ok(paths) -> #(model, push_model_drawing(model, paths, False))
+        Error(_) -> #(model, push_model_drawing(model, [], False))
+      }
+    }
 
     // After each keystroke in the editor, evaluate user code and draw paths.
     SetCode(text) -> {
@@ -296,12 +367,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       case run_source(model.shape_slider, text) {
         Ok(paths) -> #(
           Model(..model, source: text, drawings: drawings, error: None),
-          push_drawing(paths, True),
+          push_model_drawing(model, paths, True),
         )
         Error(msg) -> #(
           Model(..model, source: text, drawings: drawings, error: Some(msg)),
           // Still show the code; clear the canvas when it doesn't run.
-          push_drawing([], True),
+          push_model_drawing(model, [], True),
         )
       }
     }
@@ -324,6 +395,15 @@ pub fn view(model: Model) -> Element(Msg) {
     html.div([attr.class("code-col")], [
       editor.view_panel(ToggleCode, view_drawing_select(model)),
     ]),
+    html.div(
+      [
+        attr.class("col-splitter"),
+        attr.attribute("role", "separator"),
+        attr.attribute("aria-orientation", "vertical"),
+        attr.attribute("title", "Drag to resize"),
+      ],
+      [],
+    ),
     view_anim(model),
   ])
 }
@@ -348,6 +428,25 @@ fn view_drawing_select(model: Model) -> Element(Msg) {
       list.append(drawing_options, [
         html.option([attr.value(new_drawing_value)], "+ New drawing"),
       ]),
+    ),
+    html.select(
+      [
+        attr.attribute("data-test-id", "editor-mode-select"),
+        attr.class("drawing-select editor-mode-select"),
+        attr.attribute("title", "Code editor keybindings"),
+        attr.value(editor_mode_value(model.editor_mode)),
+        event.on_change(fn(raw) { SetEditorMode(parse_editor_mode(raw)) }),
+      ],
+      [
+        html.option(
+          [attr.value("regular"), attr.selected(model.editor_mode == Regular)],
+          "Regular",
+        ),
+        html.option(
+          [attr.value("neovim"), attr.selected(model.editor_mode == Neovim)],
+          "Neovim",
+        ),
+      ],
     ),
   ])
 }
@@ -453,7 +552,28 @@ fn view_controls(model: Model) -> Element(Msg) {
           }
         },
       ),
+      html.div([attr.class("color-rows")], [
+        view_color_row("Primary", model.primary_color, SetPrimaryColor),
+        view_color_row("Secondary", model.secondary_color, SetSecondaryColor),
+      ]),
     ]),
+  ])
+}
+
+fn view_color_row(
+  label: String,
+  value: String,
+  to_msg: fn(String) -> Msg,
+) -> Element(Msg) {
+  html.label([attr.class("color-row")], [
+    html.span([attr.class("slider-label")], [html.text(label)]),
+    html.input([
+      attr.type_("color"),
+      attr.class("color-input"),
+      attr.value(value),
+      event.on_input(to_msg),
+    ]),
+    html.span([attr.class("slider-value color-hex")], [html.text(value)]),
   ])
 }
 

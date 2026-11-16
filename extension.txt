@@ -1,1 +1,5 @@
 Describe your extension(s) here before implementing them.
+
+- Editor mode dropdown (Regular / Neovim) next to the drawing picker: Regular keeps CodeMirror 6; Neovim switches to Ace Editor (https://github.com/ajaxorg/ace) with Ace's built-in Vim keymap (hjkl, modes, operators, sticky columns).
+- Draggable column splitter between the code editor and the canvas.
+- Primary and secondary stroke colour pickers (side by side) in a compact Controls panel. Paths alternate by index (even → primary, odd → secondary). Path record unchanged.

@@ -18,17 +18,40 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 /* Left column: the code editor. */
 .code-col {
   width: 42%;
-  min-width: 320px;
-  max-width: 720px;
+  min-width: 240px;
   flex-shrink: 0;
   display: flex;
-  border-right: 1px solid #3a3a5e;
   background: #0f0f1e;
 }
 
 /* The code column stays in the DOM when collapsed, so CodeMirror keeps its
    state; hiding it gives the right column the full width. */
 .app.code-hidden .code-col { display: none; }
+.app.code-hidden .col-splitter { display: none; }
+
+/* Draggable gutter between code and animation. */
+.col-splitter {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: #2a2a4a;
+  border-left: 1px solid #3a3a5e;
+  border-right: 1px solid #3a3a5e;
+  position: relative;
+  z-index: 5;
+}
+.col-splitter:hover,
+.col-splitter.dragging {
+  background: #6a6aaa;
+}
+body.col-resizing {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+body.col-resizing iframe,
+body.col-resizing canvas {
+  pointer-events: none;
+}
 
 /* A small emoji button (the code pane's collapse toggle, and the playback
    controls once they exist). */
@@ -72,14 +95,18 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
   letter-spacing: 1px;
 }
 
-/* Drawing picker: under the title, above the editor. */
+/* Drawing + editor-mode pickers: under the title, above the editor. */
 .drawing-select-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
   padding: 8px 14px;
   background: #141428;
   border-bottom: 1px solid #3a3a5e;
 }
 .drawing-select {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 6px 8px;
   border: 1px solid #4a4a8a;
   border-radius: 4px;
@@ -87,6 +114,11 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
   color: #d4c5a0;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 13px;
+}
+.editor-mode-select {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 40%;
 }
 .drawing-select:focus {
   outline: 1px solid #8a8aca;
@@ -100,15 +132,66 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
   position: relative;
   display: flex;
 }
-/* CodeMirror mount node: grows to fill the panel. */
+/* Editor mount node: grows to fill the panel (CodeMirror or Ace). */
 .code-editor {
   flex: 1;
   min-height: 0;
+  position: relative;
   display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: #0d0d1a;
 }
+.code-editor .editor-host {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  position: relative;
+}
 .code-editor .cm-editor { width: 100%; height: 100%; }
+.code-editor .ace_editor {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  background: #0d0d1a !important;
+}
+.code-editor .ace_gutter {
+  background: #0d0d1a !important;
+  color: #3a3a5e !important;
+  border-right: none !important;
+}
+/* Ace reserves fold/annotation padding even with fold widgets off; match CM. */
+.code-editor .ace_gutter-cell {
+  padding-left: 5px !important;
+  padding-right: 6px !important;
+}
+/* Match CodeMirror token colours in Ace Gleam mode. */
+.code-editor .ace_keyword { color: #c792ea !important; }
+.code-editor .ace_string { color: #c3e88d !important; }
+.code-editor .ace_comment { color: #6a7a6a !important; font-style: italic; }
+.code-editor .ace_constant.ace_numeric { color: #f78c6c !important; }
+.code-editor .ace_constant.ace_language { color: #82aaff !important; }
+.code-editor .ace_entity.ace_name.ace_type { color: #ffcb6b !important; }
+.code-editor .ace_keyword.ace_operator { color: #89ddff !important; }
+.code-editor .ace_identifier { color: #d4c5a0 !important; }
+/* Overlay status: toggling Neovim must not resize the editor. */
+.code-editor .vim-status {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  padding: 4px 10px;
+  background: rgba(20, 20, 40, 0.95);
+  color: #d4c5a0;
+  border-top: 1px solid #3a3a5e;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  pointer-events: none;
+}
+.code-editor .vim-status.vim-status-hidden {
+  visibility: hidden;
+}
 
 /* Collapsible reference of the built-ins available to draw functions. */
 .reference {
@@ -202,19 +285,20 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 /* Playback + slider controls in the bottom-right of the animation pane. */
 .playback-panel {
   position: absolute;
-  right: 12px;
-  bottom: 12px;
+  right: 10px;
+  bottom: 10px;
   z-index: 10;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-width: 220px;
-  max-width: min(280px, 90%);
-  padding: 10px 12px;
+  gap: 6px;
+  min-width: 200px;
+  max-width: min(240px, 88%);
+  padding: 8px 10px;
   border: 1px solid #3a3a5e;
-  border-radius: 6px;
+  border-radius: 5px;
   background: rgba(15, 15, 30, 0.92);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
 }
 .playback-panel.controls-hidden {
   display: none;
@@ -223,39 +307,47 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 .playback-title {
   color: #e8d8b0;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.playback-header .icon-btn {
+  padding: 2px 6px;
+  font-size: 12px;
+  line-height: 1.2;
+}
 .reveal-controls {
   position: absolute;
-  right: 12px;
-  bottom: 12px;
+  right: 10px;
+  bottom: 10px;
   z-index: 10;
   font-size: 12px;
+  padding: 4px 8px;
 }
 .playback-buttons {
   display: flex;
-  gap: 6px;
+  gap: 5px;
 }
 .playback-buttons .icon-btn {
   flex: 1;
-  font-size: 12px;
+  font-size: 11px;
+  padding: 4px 6px;
+  line-height: 1.2;
 }
 .slider-row {
   display: grid;
-  grid-template-columns: 48px 1fr 36px;
+  grid-template-columns: 42px 1fr 30px;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 .slider-label,
 .slider-value {
   color: #b8a888;
-  font-size: 12px;
+  font-size: 11px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
 }
 .slider-value {
@@ -265,6 +357,31 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .slider-row input[type="range"] {
   width: 100%;
   accent-color: #8a8aca;
+}
+.color-rows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 2px;
+}
+.color-row {
+  display: grid;
+  grid-template-columns: auto 26px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.color-input {
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #3a3a5e;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+.color-hex {
+  display: none;
 }
 
 /* A centred square that fits the (possibly non-square) animation area. Give your

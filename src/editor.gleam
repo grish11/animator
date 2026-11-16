@@ -14,6 +14,9 @@ import lustre/event
 @external(javascript, "./editor_ffi.mjs", "mountEditor")
 fn do_mount(text: String, on_change: fn(String) -> Nil) -> Nil
 
+@external(javascript, "./editor_ffi.mjs", "setKeymap")
+fn do_set_keymap(mode: String) -> Nil
+
 /// Mount a CodeMirror editor showing text, routing every edit through on_change.
 /// Mounting tears down any previous editor itself, so re-mounting just calls this
 /// again — there is no separate unmount.
@@ -21,6 +24,12 @@ fn do_mount(text: String, on_change: fn(String) -> Nil) -> Nil
 /// new editor, the caller has to update the animation too.
 pub fn mount(text: String, on_change: fn(String) -> msg) -> Effect(msg) {
   effect.from(fn(dispatch) { do_mount(text, fn(t) { dispatch(on_change(t)) }) })
+}
+
+/// Switch the live editor between `"regular"` (CodeMirror) and `"neovim"`
+/// (Ace Editor + Ace's Vim keymap: hjkl, modes, operators, and the rest).
+pub fn set_keymap(mode: String) -> Effect(msg) {
+  effect.from(fn(_dispatch) { do_set_keymap(mode) })
 }
 
 // ── View ──────────────────────────────────────────────────────────────────────

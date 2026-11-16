@@ -1,1 +1,8 @@
 build/
+
+# Course / Gradescope submission artifacts
+.provenance/
+.provenance-manifest
+.server_logs/
+61a-*-bundle*.zip
+*.zip
