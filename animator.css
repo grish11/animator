@@ -359,29 +359,48 @@ body.col-resizing canvas {
   accent-color: #8a8aca;
 }
 .color-rows {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin-top: 2px;
 }
 .color-row {
-  display: grid;
-  grid-template-columns: auto 26px;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-width: 0;
+  gap: 4px;
+  width: fit-content;
+  cursor: pointer;
 }
 .color-input {
-  width: 26px;
-  height: 22px;
+  width: 22px;
+  height: 18px;
   padding: 0;
   border: 1px solid #3a3a5e;
   border-radius: 3px;
   background: transparent;
   cursor: pointer;
+  flex-shrink: 0;
 }
-.color-hex {
-  display: none;
+.effect-row {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  align-items: center;
+  gap: 6px;
+}
+.effect-select {
+  width: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid #4a4a8a;
+  border-radius: 4px;
+  background: #1a1a32;
+  color: #e8d8b0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+}
+.effect-select:focus {
+  outline: 1px solid #8a8aca;
+  outline-offset: 1px;
 }
 
 /* A centred square that fits the (possibly non-square) animation area. Give your

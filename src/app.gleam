@@ -56,6 +56,15 @@ pub type EditorMode {
   Neovim
 }
 
+/// How primary / secondary colours animate across strokes.
+pub type ColorEffect {
+  Static
+  Wave
+  Cycle
+  Noise
+  Spiral
+}
+
 // ── Model ──────────────────────────────────────────────────────────────────────
 
 pub type Model {
@@ -78,9 +87,11 @@ pub type Model {
     speed: Float,
     // Regular (default) or Neovim (hjkl / vim) keybindings in the code editor.
     editor_mode: EditorMode,
-    // Stroke colours: even path index → primary, odd → secondary.
+    // Stroke colours: even path index → primary, odd → secondary (Static).
     primary_color: String,
     secondary_color: String,
+    // Animated colour blending over the two palette colours.
+    color_effect: ColorEffect,
   )
 }
 
@@ -105,6 +116,7 @@ pub type Msg {
   SetSpeed(Float)
   SetPrimaryColor(String)
   SetSecondaryColor(String)
+  SetColorEffect(ColorEffect)
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────────
@@ -141,10 +153,38 @@ pub fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
       editor_mode: Regular,
       primary_color: default_primary,
       secondary_color: default_secondary,
+      color_effect: Static,
     ),
     // Effects that happen automatically at the start go here.
-    effect.batch([load_drawing(source), pane_split.mount()]),
+    effect.batch([
+      load_drawing(source),
+      pane_split.mount(),
+      effect.from(fn(_dispatch) {
+        render.set_palette(default_primary, default_secondary)
+        render.set_color_effect("static")
+      }),
+    ]),
   )
+}
+
+fn color_effect_value(mode: ColorEffect) -> String {
+  case mode {
+    Static -> "static"
+    Wave -> "wave"
+    Cycle -> "cycle"
+    Noise -> "noise"
+    Spiral -> "spiral"
+  }
+}
+
+fn parse_color_effect(raw: String) -> ColorEffect {
+  case raw {
+    "wave" -> Wave
+    "cycle" -> Cycle
+    "noise" -> Noise
+    "spiral" -> Spiral
+    _ -> Static
+  }
 }
 
 fn editor_mode_value(mode: EditorMode) -> String {
@@ -220,6 +260,7 @@ fn push_drawing(
   paths: List(Path),
   primary: String,
   secondary: String,
+  color_effect: ColorEffect,
   restart: Bool,
 ) -> Effect(Msg) {
   let rendered =
@@ -231,6 +272,8 @@ fn push_drawing(
       render.render_path(path, color)
     })
   effect.from(fn(_dispatch) {
+    render.set_palette(primary, secondary)
+    render.set_color_effect(color_effect_value(color_effect))
     render.set_drawing(rendered)
     case restart {
       True -> render.reset_clock()
@@ -240,7 +283,13 @@ fn push_drawing(
 }
 
 fn push_model_drawing(model: Model, paths: List(Path), restart: Bool) -> Effect(Msg) {
-  push_drawing(paths, model.primary_color, model.secondary_color, restart)
+  push_drawing(
+    paths,
+    model.primary_color,
+    model.secondary_color,
+    model.color_effect,
+    restart,
+  )
 }
 
 fn set_speed_effect(speed: Float) -> Effect(Msg) {
@@ -358,6 +407,16 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         Ok(paths) -> #(model, push_model_drawing(model, paths, False))
         Error(_) -> #(model, push_model_drawing(model, [], False))
       }
+    }
+
+    SetColorEffect(mode) -> {
+      let model = Model(..model, color_effect: mode)
+      #(
+        model,
+        effect.from(fn(_dispatch) {
+          render.set_color_effect(color_effect_value(mode))
+        }),
+      )
     }
 
     // After each keystroke in the editor, evaluate user code and draw paths.
@@ -553,11 +612,47 @@ fn view_controls(model: Model) -> Element(Msg) {
         },
       ),
       html.div([attr.class("color-rows")], [
-        view_color_row("Primary", model.primary_color, SetPrimaryColor),
-        view_color_row("Secondary", model.secondary_color, SetSecondaryColor),
+        view_color_row("Primary:", model.primary_color, SetPrimaryColor),
+        view_color_row("Secondary:", model.secondary_color, SetSecondaryColor),
       ]),
+      view_effects_row(model),
     ]),
   ])
+}
+
+fn view_effects_row(model: Model) -> Element(Msg) {
+  html.label([attr.class("effect-row")], [
+    html.span([attr.class("slider-label")], [html.text("Effects")]),
+    html.select(
+      [
+        attr.class("effect-select"),
+        attr.attribute("title", "Colour animation effect"),
+        attr.value(color_effect_value(model.color_effect)),
+        event.on_change(fn(raw) { SetColorEffect(parse_color_effect(raw)) }),
+      ],
+      [
+        effect_option(Static, model.color_effect, "Static"),
+        effect_option(Wave, model.color_effect, "Wave"),
+        effect_option(Cycle, model.color_effect, "Cycle"),
+        effect_option(Noise, model.color_effect, "Noise"),
+        effect_option(Spiral, model.color_effect, "Spiral"),
+      ],
+    ),
+  ])
+}
+
+fn effect_option(
+  mode: ColorEffect,
+  selected: ColorEffect,
+  label: String,
+) -> Element(Msg) {
+  html.option(
+    [
+      attr.value(color_effect_value(mode)),
+      attr.selected(mode == selected),
+    ],
+    label,
+  )
 }
 
 fn view_color_row(
@@ -573,7 +668,6 @@ fn view_color_row(
       attr.value(value),
       event.on_input(to_msg),
     ]),
-    html.span([attr.class("slider-value color-hex")], [html.text(value)]),
   ])
 }
 

@@ -12,13 +12,18 @@
 
 let canvas = null;
 let ctx = null;
-// { paths: [{ pts: Float64Array [x0,y0,...], thickness, color, start, end }] }
+// { paths: [{ pts: Float64Array [x0,y0,...], thickness, color, start, end, index }] }
 let drawing = null;
 let rate = 1; // a multiple of normal speed; negative plays the drawing backward
 let clock = 0; // the drawing's time, in tenths of a second, in [0, endClock]
 let lastTs = 0;
 let running = false;
 let framesWithoutCanvas = 0;
+let primaryColor = "#e8d8b0";
+let secondaryColor = "#8a8aca";
+// "static" | "wave" | "cycle" | "noise" | "spiral"
+let colorEffect = "static";
+let frameNow = 0; // performance.now() of the current frame (ms)
 
 const TENTHS_PER_SECOND = 10;
 // How many frames (about 10 seconds' worth) to wait for the canvas to appear
@@ -30,6 +35,7 @@ const MAX_FRAMES_WITHOUT_CANVAS = 600;
 // the per-frame draw loop touches only contiguous numbers.
 export function setDrawing(pathList) {
   const paths = [];
+  let index = 0;
   for (const p of pathList) {
     const flat = [];
     for (const q of p.points) flat.push(q.x, q.y);
@@ -39,6 +45,7 @@ export function setDrawing(pathList) {
       color: p.color,
       start: p.start,
       end: p.end,
+      index: index++,
     });
   }
   // Keep the current clock across drawing swaps: dragging the shape slider on an
@@ -84,10 +91,23 @@ export function resetClock() {
   clock = 0;
 }
 
+export function setPalette(primary, secondary) {
+  primaryColor = primary || primaryColor;
+  secondaryColor = secondary || secondaryColor;
+}
+
+export function setColorEffect(mode) {
+  const next = String(mode || "static").toLowerCase();
+  colorEffect = ["static", "wave", "cycle", "noise", "spiral"].includes(next)
+    ? next
+    : "static";
+}
+
 function frame(ts) {
   // Cap dt so a backgrounded/paused tab can't jump the clock far ahead.
   const dt = Math.min((ts - lastTs) / 1000, 0.1);
   lastTs = ts;
+  frameNow = ts;
   // The clock runs forward, each path drawing in over its window and then
   // staying; there is no loop back to an empty canvas. It is bounded at both
   // ends: reverse rewinds only as far as the start (0), and forward stops the
@@ -192,7 +212,97 @@ function drawUpToU(p, u) {
     ctx.lineTo(ax + (bx - ax) * frac, ay + (by - ay) * frac);
   }
   ctx.lineWidth = p.thickness;
-  ctx.strokeStyle = p.color;
+  ctx.strokeStyle = strokeColorFor(p);
   ctx.stroke();
+}
+
+// ── Colour effects (primary / secondary) ─────────────────────────────────────
+
+function parseHex(hex) {
+  const s = String(hex || "").replace("#", "").trim();
+  if (s.length === 3) {
+    return [
+      parseInt(s[0] + s[0], 16),
+      parseInt(s[1] + s[1], 16),
+      parseInt(s[2] + s[2], 16),
+    ];
+  }
+  if (s.length >= 6) {
+    return [
+      parseInt(s.slice(0, 2), 16),
+      parseInt(s.slice(2, 4), 16),
+      parseInt(s.slice(4, 6), 16),
+    ];
+  }
+  return [232, 216, 176];
+}
+
+function lerpColor(a, b, t) {
+  const u = clamp(t, 0, 1);
+  const A = parseHex(a);
+  const B = parseHex(b);
+  const r = Math.round(A[0] + (B[0] - A[0]) * u);
+  const g = Math.round(A[1] + (B[1] - A[1]) * u);
+  const bl = Math.round(A[2] + (B[2] - A[2]) * u);
+  return `rgb(${r},${g},${bl})`;
+}
+
+function pathMid(p) {
+  const pts = p.pts;
+  const n = pts.length / 2;
+  if (n < 1) return { x: 0, y: 0 };
+  let sx = 0;
+  let sy = 0;
+  for (let i = 0; i < n; i++) {
+    sx += pts[2 * i];
+    sy += pts[2 * i + 1];
+  }
+  return { x: sx / n, y: sy / n };
+}
+
+function hash01(i, tick) {
+  const x = Math.sin(i * 12.9898 + tick * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function strokeColorFor(p) {
+  const i = p.index | 0;
+  const n = drawing && drawing.paths ? drawing.paths.length : 1;
+  const tSec = frameNow / 1000;
+
+  switch (colorEffect) {
+    case "wave": {
+      // Travelling band of primary sweeping along path order; secondary fills behind.
+      const phase = tSec * 1.4;
+      const pos = n <= 1 ? 0 : i / (n - 1);
+      const wave = Math.sin(pos * Math.PI * 2 - phase);
+      return lerpColor(primaryColor, secondaryColor, (wave + 1) / 2);
+    }
+    case "cycle": {
+      // Global breathe: primary fades into secondary and back.
+      const breath = (Math.sin(tSec * 1.6) + 1) / 2;
+      return lerpColor(primaryColor, secondaryColor, breath);
+    }
+    case "noise": {
+      // Per-path flicker between the two colours.
+      const tick = Math.floor(tSec * 6);
+      const a = hash01(i, tick);
+      const b = hash01(i, tick + 1);
+      const frac = tSec * 6 - tick;
+      const mixed = a * (1 - frac) + b * frac;
+      return lerpColor(primaryColor, secondaryColor, mixed);
+    }
+    case "spiral": {
+      // Colours rotate around the origin by path angle and radius.
+      const mid = pathMid(p);
+      const ang = Math.atan2(mid.y, mid.x);
+      const rad = Math.hypot(mid.x, mid.y) / 500;
+      const swirl = Math.sin(ang * 3 - tSec * 2.2 + rad * 5);
+      return lerpColor(primaryColor, secondaryColor, (swirl + 1) / 2);
+    }
+    case "static":
+    default:
+      return i % 2 === 0 ? primaryColor : secondaryColor;
+  }
 }
 

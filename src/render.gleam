@@ -37,6 +37,14 @@ pub fn set_speed(rate: Float) -> Nil
 @external(javascript, "./canvas.mjs", "resetClock")
 pub fn reset_clock() -> Nil
 
+/// Primary / secondary stroke colours used by Static and animated Effects.
+@external(javascript, "./canvas.mjs", "setPalette")
+pub fn set_palette(primary: String, secondary: String) -> Nil
+
+/// Colour animation mode: `"static"`, `"wave"`, `"cycle"`, `"noise"`, or `"spiral"`.
+@external(javascript, "./canvas.mjs", "setColorEffect")
+pub fn set_color_effect(mode: String) -> Nil
+
 pub fn render_path(path: Path, color: String) -> RenderPath {
   case path.shape {
     Line(a, b) ->
