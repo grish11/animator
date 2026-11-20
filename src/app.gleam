@@ -2,6 +2,7 @@
 
 import builtins
 import data
+import draw_studio
 import drawing
 import editor
 import errors
@@ -17,11 +18,10 @@ import lustre/effect.{type Effect}
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
+import pane_split
 import parser
 import render
 import shape.{type Path}
-import pane_split
-import draw_studio
 
 /// Your app's public address, once you've deployed it in Problem 13, such as
 /// "https://your-username.github.io/animator/".
@@ -31,10 +31,11 @@ pub const public_url = "https://animator-grish11.vercel.app/"
 pub const include_app_in_gallery = False
 
 /// A link to your video from Problem 14, which anyone with the link can watch.
-pub const video_url = ""
+pub const video_url =
+  "https://drive.google.com/file/d/18OFUIUvd2TLrR_NTTMgb4K9fMWCs0w6K/view?usp=drive_link"
 
 /// Set to True if you would like your video included in the course gallery.
-pub const include_video_in_gallery = False
+pub const include_video_in_gallery = True
 
 const default_code =
   "fn draw(shape_slider: Int) -> List(Path) {\n  [Path(Line(Point(0, 0), Point(100, 100)), 0, 10, 2)]\n}\n"
@@ -45,6 +46,7 @@ const new_drawing_value = ""
 
 /// Default stroke colours: even-index paths use primary, odd-index use secondary.
 const default_primary = "#e8d8b0"
+
 const default_secondary = "#8a8aca"
 
 const default_shape = 10
@@ -399,7 +401,11 @@ fn push_drawing(
   })
 }
 
-fn push_model_drawing(model: Model, paths: List(Path), restart: Bool) -> Effect(Msg) {
+fn push_model_drawing(
+  model: Model,
+  paths: List(Path),
+  restart: Bool,
+) -> Effect(Msg) {
   push_drawing(
     paths,
     model.primary_color,
