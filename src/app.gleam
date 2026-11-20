@@ -92,6 +92,8 @@ pub type Model {
     secondary_color: String,
     // Animated colour blending over the two palette colours.
     color_effect: ColorEffect,
+    // True while a GIF export is encoding (disables export buttons).
+    export_busy: Bool,
   )
 }
 
@@ -117,6 +119,11 @@ pub type Msg {
   SetPrimaryColor(String)
   SetSecondaryColor(String)
   SetColorEffect(ColorEffect)
+
+  // Canvas export (top-right of the animation pane)
+  ExportPng
+  ExportGif
+  ExportFinished
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────────
@@ -154,6 +161,7 @@ pub fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
       primary_color: default_primary,
       secondary_color: default_secondary,
       color_effect: Static,
+      export_busy: False,
     ),
     // Effects that happen automatically at the start go here.
     effect.batch([
@@ -419,6 +427,24 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       )
     }
 
+    ExportPng -> #(
+      model,
+      effect.from(fn(_dispatch) { render.export_png(model.selected) }),
+    )
+
+    ExportGif ->
+      case model.export_busy {
+        True -> #(model, effect.none())
+        False -> #(
+          Model(..model, export_busy: True),
+          effect.from(fn(dispatch) {
+            render.export_gif(model.selected, fn() { dispatch(ExportFinished) })
+          }),
+        )
+      }
+
+    ExportFinished -> #(Model(..model, export_busy: False), effect.none())
+
     // After each keystroke in the editor, evaluate user code and draw paths.
     SetCode(text) -> {
       let drawings = set_drawing_source(model.drawings, model.selected, text)
@@ -513,9 +539,37 @@ fn view_drawing_select(model: Model) -> Element(Msg) {
 fn view_anim(model: Model) -> Element(Msg) {
   html.div([attr.class("canvas-area")], [
     view_reveal_code(model),
+    view_export_bar(model),
     html.canvas([attr.id("animation-canvas"), attr.class("canvas")]),
     view_error(model),
     view_controls(model),
+  ])
+}
+
+fn view_export_bar(model: Model) -> Element(Msg) {
+  let gif_label = case model.export_busy {
+    True -> "GIF…"
+    False -> "GIF"
+  }
+  html.div([attr.class("export-bar")], [
+    html.button(
+      [
+        attr.class("icon-btn export-btn"),
+        attr.attribute("title", "Download current frame as PNG"),
+        attr.disabled(model.export_busy),
+        event.on_click(ExportPng),
+      ],
+      [html.text("PNG")],
+    ),
+    html.button(
+      [
+        attr.class("icon-btn export-btn"),
+        attr.attribute("title", "Download animated GIF of the reveal"),
+        attr.disabled(model.export_busy),
+        event.on_click(ExportGif),
+      ],
+      [html.text(gif_label)],
+    ),
   ])
 }
 

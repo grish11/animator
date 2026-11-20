@@ -9,3 +9,6 @@ Describe your extension(s) here before implementing them.
 - Effects dropdown in Controls (Static, Wave, Cycle, Noise, Spiral): animates strokes
     between the primary and secondary colours (wave sweep, breathing cycle, noise flicker,
     angular spiral). Static is the fixed even/odd palette.
+- Export PNG / GIF buttons (top-right of the canvas): PNG uses the MDN canvas.toBlob
+    API; GIF captures the finished drawing looping colour Effects (not the build
+    reveal) via gif.js (https://github.com/jnordberg/gif.js).

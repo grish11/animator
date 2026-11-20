@@ -24,8 +24,15 @@ let secondaryColor = "#8a8aca";
 // "static" | "wave" | "cycle" | "noise" | "spiral"
 let colorEffect = "static";
 let frameNow = 0; // performance.now() of the current frame (ms)
+let gifWorkerUrl = null;
+let gifLibPromise = null;
+let exporting = false;
 
 const TENTHS_PER_SECOND = 10;
+const CANVAS_BG = "#0a0a14";
+const GIF_CDN = "https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist";
+const GIF_MAX_SIDE = 480;
+const GIF_FRAME_COUNT = 36;
 // How many frames (about 10 seconds' worth) to wait for the canvas to appear
 // before reporting that it hasn't.
 const MAX_FRAMES_WITHOUT_CANVAS = 600;
@@ -150,7 +157,7 @@ function findCanvas() {
 }
 
 function render() {
-  if (!findCanvas()) return;
+  if (!findCanvas() || !drawing) return;
   ensureSize();
   const w = canvas.width;
   const h = canvas.height;
@@ -304,5 +311,190 @@ function strokeColorFor(p) {
     default:
       return i % 2 === 0 ? primaryColor : secondaryColor;
   }
+}
+
+// ── Export PNG / GIF ─────────────────────────────────────────────────────────
+// PNG: MDN HTMLCanvasElement.toBlob → Blob → object URL download
+//   https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toBlob
+// GIF: gif.js addFrame(canvas) + render() (jnordberg/gif.js README)
+//   https://github.com/jnordberg/gif.js
+
+function safeName(name, ext) {
+  const base = String(name || "drawing")
+    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48);
+  return `${base || "drawing"}.${ext}`;
+}
+
+function downloadBlob(blob, filename) {
+  // MDN: URL.createObjectURL + revoke when done
+  // https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL_static
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[data-export-src="${src}"]`);
+    if (existing) {
+      if (existing.dataset.loaded === "1") return resolve();
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () => reject(new Error(src)));
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = src;
+    s.async = true;
+    s.dataset.exportSrc = src;
+    s.onload = () => {
+      s.dataset.loaded = "1";
+      resolve();
+    };
+    s.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(s);
+  });
+}
+
+async function loadGifLibrary() {
+  if (window.GIF && gifWorkerUrl) return window.GIF;
+  if (gifLibPromise) return gifLibPromise;
+  gifLibPromise = (async () => {
+    await loadScript(`${GIF_CDN}/gif.js`);
+    if (!window.GIF) throw new Error("gif.js did not define window.GIF");
+    // Same-origin worker via Blob URL (CDN workers are blocked cross-origin).
+    const workerBlob = await fetch(`${GIF_CDN}/gif.worker.js`).then((r) => {
+      if (!r.ok) throw new Error("Failed to fetch gif.worker.js");
+      return r.blob();
+    });
+    gifWorkerUrl = URL.createObjectURL(workerBlob);
+    return window.GIF;
+  })().catch((e) => {
+    gifLibPromise = null;
+    throw e;
+  });
+  return gifLibPromise;
+}
+
+function snapshotWithBackground() {
+  // GIF has weak transparency support; bake the app background in.
+  const src = canvas;
+  const w = src.width;
+  const h = src.height;
+  const scale = Math.min(1, GIF_MAX_SIDE / Math.max(w, h, 1));
+  const out = document.createElement("canvas");
+  out.width = Math.max(1, Math.round(w * scale));
+  out.height = Math.max(1, Math.round(h * scale));
+  const octx = out.getContext("2d");
+  octx.fillStyle = CANVAS_BG;
+  octx.fillRect(0, 0, out.width, out.height);
+  octx.drawImage(src, 0, 0, out.width, out.height);
+  return out;
+}
+
+/// Snapshot the current canvas as a PNG download (MDN toBlob, type image/png).
+export function exportPng(name) {
+  if (!findCanvas() || !drawing) {
+    console.error("Nothing to export yet.");
+    return;
+  }
+  render();
+  // Prefer toBlob over toDataURL for large canvases (MDN guidance).
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      console.error("canvas.toBlob returned null");
+      return;
+    }
+    downloadBlob(blob, safeName(name, "png"));
+  }, "image/png");
+}
+
+/// Replay the drawing into an animated GIF and download it (gif.js API).
+/// `onDone` is invoked when encoding finishes or fails (Gleam clears busy state).
+export function exportGif(name, onDone) {
+  const done = () => {
+    if (typeof onDone === "function") onDone();
+  };
+  if (exporting) {
+    done();
+    return;
+  }
+  if (!findCanvas() || !drawing) {
+    console.error("Nothing to export yet.");
+    done();
+    return;
+  }
+  exporting = true;
+  const savedClock = clock;
+  const savedRate = rate;
+  rate = 0;
+
+  const finish = () => {
+    clock = savedClock;
+    rate = savedRate;
+    frameNow = performance.now();
+    render();
+    exporting = false;
+    done();
+  };
+
+  loadGifLibrary()
+    .then((GIF) => {
+      // Fully drawn: GIF loops colour Effects on the finished piece, not the reveal.
+      const end =
+        Number.isFinite(drawing.endClock) && drawing.endClock > 0
+          ? drawing.endClock
+          : 0;
+      clock = end;
+
+      const frames = GIF_FRAME_COUNT;
+      // ~2s effect loop at ~18fps (matches Wave/Cycle periods roughly).
+      const loopMs = 2000;
+      const delayMs = Math.round(loopMs / frames);
+      const t0 = performance.now();
+
+      // First frame sizes the GIF (gif.js README: width/height from first frame).
+      frameNow = t0;
+      render();
+      const first = snapshotWithBackground();
+      const gif = new GIF({
+        workers: 2,
+        quality: 10,
+        workerScript: gifWorkerUrl,
+        width: first.width,
+        height: first.height,
+        background: CANVAS_BG,
+      });
+
+      for (let i = 0; i < frames; i++) {
+        // Advance wall-clock time so Wave/Cycle/Noise/Spiral animate; clock stays finished.
+        frameNow = t0 + (loopMs * i) / Math.max(1, frames);
+        render();
+        const frameCanvas = snapshotWithBackground();
+        // gif.js: addFrame(canvasElement, { delay, copy })
+        gif.addFrame(frameCanvas, { delay: delayMs, copy: true });
+      }
+
+      gif.on("finished", (blob) => {
+        downloadBlob(blob, safeName(name, "gif"));
+        finish();
+      });
+      gif.on("abort", () => {
+        console.error("GIF export aborted");
+        finish();
+      });
+      gif.render();
+    })
+    .catch((e) => {
+      console.error("GIF export failed:", e);
+      finish();
+    });
 }
 

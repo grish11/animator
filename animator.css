@@ -260,6 +260,25 @@ body.col-resizing canvas {
   z-index: 10;
 }
 
+/* PNG / GIF downloads, top-right of the animation pane. */
+.export-bar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  gap: 6px;
+}
+.export-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  letter-spacing: 0.04em;
+}
+.export-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 /* Short parse/eval message over the canvas, pinned to the top center. */
 .error-box {
   position: absolute;

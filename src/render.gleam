@@ -45,6 +45,15 @@ pub fn set_palette(primary: String, secondary: String) -> Nil
 @external(javascript, "./canvas.mjs", "setColorEffect")
 pub fn set_color_effect(mode: String) -> Nil
 
+/// Download the current canvas frame as a PNG (`HTMLCanvasElement.toBlob`).
+@external(javascript, "./canvas.mjs", "exportPng")
+pub fn export_png(name: String) -> Nil
+
+/// Replay the drawing into an animated GIF and download it (gif.js).
+/// Calls `on_done` when encoding finishes (or fails).
+@external(javascript, "./canvas.mjs", "exportGif")
+pub fn export_gif(name: String, on_done: fn() -> Nil) -> Nil
+
 pub fn render_path(path: Path, color: String) -> RenderPath {
   case path.shape {
     Line(a, b) ->
