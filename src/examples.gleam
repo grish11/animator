@@ -5,12 +5,19 @@ pub const all = [
   #(
     "fan",
     "fn draw(shape_slider: Int) -> List(Path) {
-  fan(30, Point(-200, -200))
+  let rays = 20 + shape_slider / 2
+  fan(rays, Point(-200, -200), 0)
 }
 
-fn fan(n: Int, start: Point) -> List(Path) {
+fn fan(n: Int, start: Point, i: Int) -> List(Path) {
   case n > 0 {
-    True -> [Path(Line(start, Point(n * 10, 200)), 0, 30, 3), ..fan(n - 1, start)]
+    True -> {
+      let t = i * 2
+      [
+        Path(Line(start, Point(n * 10, 200)), t, t + 2, 3),
+        ..fan(n - 1, start, i + 1)
+      ]
+    }
     False -> []
   }
 }

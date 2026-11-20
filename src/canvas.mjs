@@ -9,6 +9,10 @@
 // Values cross the Gleam/JS boundary directly — no JSON: a Gleam record arrives
 // as an object with named fields, and a Gleam list is iterable.
 
+import {
+  normalizeColorEffect,
+  strokeColorFor as sharedStrokeColor,
+} from "./color_effects.mjs";
 
 let canvas = null;
 let ctx = null;
@@ -21,7 +25,7 @@ let running = false;
 let framesWithoutCanvas = 0;
 let primaryColor = "#e8d8b0";
 let secondaryColor = "#8a8aca";
-// "static" | "wave" | "cycle" | "noise" | "spiral"
+// See COLOR_EFFECT_MODES in color_effects.mjs
 let colorEffect = "static";
 let frameNow = 0; // performance.now() of the current frame (ms)
 let gifWorkerUrl = null;
@@ -104,10 +108,7 @@ export function setPalette(primary, secondary) {
 }
 
 export function setColorEffect(mode) {
-  const next = String(mode || "static").toLowerCase();
-  colorEffect = ["static", "wave", "cycle", "noise", "spiral"].includes(next)
-    ? next
-    : "static";
+  colorEffect = normalizeColorEffect(mode);
 }
 
 function frame(ts) {
@@ -223,36 +224,7 @@ function drawUpToU(p, u) {
   ctx.stroke();
 }
 
-// ── Colour effects (primary / secondary) ─────────────────────────────────────
-
-function parseHex(hex) {
-  const s = String(hex || "").replace("#", "").trim();
-  if (s.length === 3) {
-    return [
-      parseInt(s[0] + s[0], 16),
-      parseInt(s[1] + s[1], 16),
-      parseInt(s[2] + s[2], 16),
-    ];
-  }
-  if (s.length >= 6) {
-    return [
-      parseInt(s.slice(0, 2), 16),
-      parseInt(s.slice(2, 4), 16),
-      parseInt(s.slice(4, 6), 16),
-    ];
-  }
-  return [232, 216, 176];
-}
-
-function lerpColor(a, b, t) {
-  const u = clamp(t, 0, 1);
-  const A = parseHex(a);
-  const B = parseHex(b);
-  const r = Math.round(A[0] + (B[0] - A[0]) * u);
-  const g = Math.round(A[1] + (B[1] - A[1]) * u);
-  const bl = Math.round(A[2] + (B[2] - A[2]) * u);
-  return `rgb(${r},${g},${bl})`;
-}
+// ── Colour effects (primary / secondary) — see color_effects.mjs ─────────────
 
 function pathMid(p) {
   const pts = p.pts;
@@ -267,50 +239,17 @@ function pathMid(p) {
   return { x: sx / n, y: sy / n };
 }
 
-function hash01(i, tick) {
-  const x = Math.sin(i * 12.9898 + tick * 78.233) * 43758.5453;
-  return x - Math.floor(x);
-}
-
 function strokeColorFor(p) {
-  const i = p.index | 0;
   const n = drawing && drawing.paths ? drawing.paths.length : 1;
-  const tSec = frameNow / 1000;
-
-  switch (colorEffect) {
-    case "wave": {
-      // Travelling band of primary sweeping along path order; secondary fills behind.
-      const phase = tSec * 1.4;
-      const pos = n <= 1 ? 0 : i / (n - 1);
-      const wave = Math.sin(pos * Math.PI * 2 - phase);
-      return lerpColor(primaryColor, secondaryColor, (wave + 1) / 2);
-    }
-    case "cycle": {
-      // Global breathe: primary fades into secondary and back.
-      const breath = (Math.sin(tSec * 1.6) + 1) / 2;
-      return lerpColor(primaryColor, secondaryColor, breath);
-    }
-    case "noise": {
-      // Per-path flicker between the two colours.
-      const tick = Math.floor(tSec * 6);
-      const a = hash01(i, tick);
-      const b = hash01(i, tick + 1);
-      const frac = tSec * 6 - tick;
-      const mixed = a * (1 - frac) + b * frac;
-      return lerpColor(primaryColor, secondaryColor, mixed);
-    }
-    case "spiral": {
-      // Colours rotate around the origin by path angle and radius.
-      const mid = pathMid(p);
-      const ang = Math.atan2(mid.y, mid.x);
-      const rad = Math.hypot(mid.x, mid.y) / 500;
-      const swirl = Math.sin(ang * 3 - tSec * 2.2 + rad * 5);
-      return lerpColor(primaryColor, secondaryColor, (swirl + 1) / 2);
-    }
-    case "static":
-    default:
-      return i % 2 === 0 ? primaryColor : secondaryColor;
-  }
+  return sharedStrokeColor({
+    mode: colorEffect,
+    index: p.index | 0,
+    count: n,
+    tSec: frameNow / 1000,
+    mid: pathMid(p),
+    primary: primaryColor,
+    secondary: secondaryColor,
+  });
 }
 
 // ── Export PNG / GIF ─────────────────────────────────────────────────────────

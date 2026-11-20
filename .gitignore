@@ -1,1 +1,36 @@
+# Gleam build output
 build/
+
+# Published static bundle (regenerate with: gleam build && gleam dev publish)
+public/
+
+# Course assignment zips
+61a-*-animator-bundle-*.zip
+*.zip
+
+# Provenance / interview / agent logs (keep locally, don't publish)
+.provenance/
+.provenance-manifest
+.server_logs/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Vercel / Node
+.vercel/
+node_modules/
+npm-debug.log*
+.npm/
+
+# Local extension unit-test artifacts (optional; sources stay)
+# ext_tests/ stays tracked so `node --test ext_tests/*.test.mjs` is shared
+
+# Course grading scripts (stay on disk for local `gleam test -- q13`/`q14`)
+grading/
+
+# OS junk
+.DS_Store
+Thumbs.db

@@ -6,9 +6,19 @@ Describe your extension(s) here before implementing them.
 - Draggable column splitter between the code editor and the canvas.
 - Primary and secondary stroke colour pickers (side by side) in a compact Controls panel.
     Paths alternate by index (even → primary, odd → secondary). Path record unchanged.
-- Effects dropdown in Controls (Static, Wave, Cycle, Noise, Spiral): animates strokes
-    between the primary and secondary colours (wave sweep, breathing cycle, noise flicker,
-    angular spiral). Static is the fixed even/odd palette.
+- Effects dropdown in Controls + Draw Studio (15 modes): Static, Wave, Cycle, Noise,
+    Spiral, plus Pulse, Rainbow, Strobe, Aurora, Chase, Ripple, Scan, Flicker, Twinkle,
+    Shimmer — palette animations inspired by livedesign, MetaMapper, Synthlucida, and
+    Sparkle. Implemented in color_effects.mjs for the main canvas and Draw Studio.
 - Export PNG / GIF buttons (top-right of the canvas): PNG uses the MDN canvas.toBlob
     API; GIF captures the finished drawing looping colour Effects (not the build
     reveal) via gif.js (https://github.com/jnordberg/gif.js).
+- Draw Studio (Draw button): a separate overlay window for freehand ink → Gleam
+    `Path(Line(...))` code. Ink pipeline: MDN pointer capture + getCoalescedEvents,
+    One-Euro live preview (Casiez / stroke-stabilizer), arc-length resample
+    ($1 recognizer / Wobbrock UIST 2007), RDP with corner lock (Fleischmann),
+    collinear merge, optional auto-close + grid snap. Pressure (or speed-simulated)
+    maps to Path thickness. Tools: Pen / Eraser (brush preview + size, segment split),
+    Mirror H, Fidelity,
+    Effects, colours, Undo/Clear/PNG, Apply to editor. Local unit tests:
+    `gleam build && node --test ext_tests/*.test.mjs` (not Gradescope).

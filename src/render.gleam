@@ -41,7 +41,9 @@ pub fn reset_clock() -> Nil
 @external(javascript, "./canvas.mjs", "setPalette")
 pub fn set_palette(primary: String, secondary: String) -> Nil
 
-/// Colour animation mode: `"static"`, `"wave"`, `"cycle"`, `"noise"`, or `"spiral"`.
+/// Colour animation mode: `"static"`, `"wave"`, `"cycle"`, `"noise"`, `"spiral"`,
+/// plus `"pulse"`, `"rainbow"`, `"strobe"`, `"aurora"`, `"chase"`, `"ripple"`,
+/// `"scan"`, `"flicker"`, `"twinkle"`, `"shimmer"` (see color_effects.mjs).
 @external(javascript, "./canvas.mjs", "setColorEffect")
 pub fn set_color_effect(mode: String) -> Nil
 

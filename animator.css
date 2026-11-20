@@ -429,3 +429,219 @@ body.col-resizing canvas {
   height: min(100cqw, 100cqh);
 }
 
+/* ── Draw Studio (freehand → Gleam overlay window) ───────────────────────── */
+
+.draw-studio {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 4, 12, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.draw-studio-window {
+  width: min(1120px, 96vw);
+  height: min(720px, 92vh);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #3a3a6a;
+  border-radius: 10px;
+  background: linear-gradient(165deg, #12122a 0%, #0a0a18 55%, #101028 100%);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(138, 138, 202, 0.12);
+  overflow: hidden;
+}
+
+.draw-studio-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #2e2e52;
+  background: rgba(18, 18, 40, 0.95);
+}
+
+.draw-studio-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: #e8d8b0;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.draw-studio-sub {
+  color: #8a8aca;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.draw-studio-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.9fr);
+  gap: 0;
+}
+
+.draw-studio-canvas-wrap {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid #2e2e52;
+  background: #0a0a14;
+}
+
+.draw-studio-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.draw-studio-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(10, 10, 20, 0.75);
+  color: #6a6a9a;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.draw-studio-side {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #0e0e22;
+}
+
+.draw-studio-side-title {
+  padding: 10px 12px 6px;
+  color: #e8d8b0;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.draw-studio-code {
+  flex: 1;
+  min-height: 0;
+  margin: 0 12px;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid #2e2e52;
+  border-radius: 6px;
+  background: #080812;
+  color: #c8c8e8;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre;
+}
+
+.draw-studio-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 14px;
+}
+
+.draw-studio-tools .color-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.draw-studio-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.draw-studio-actions .icon-btn {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.draw-studio-apply {
+  margin-left: auto;
+  border-color: #6a6aaa;
+  color: #e8d8b0;
+  background: #1e1e48;
+}
+
+.draw-studio-apply:hover {
+  border-color: #8a8aca;
+  background: #2a2a5a;
+}
+
+.draw-studio-tool-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.draw-studio-tool-row {
+  display: flex;
+  gap: 6px;
+}
+
+.draw-studio-tool-row .tool-active {
+  border-color: #8a8aca;
+  color: #e8d8b0;
+  background: #1e1e48;
+}
+
+.draw-studio-tool-row .tool-eraser.tool-active {
+  border-color: #c07070;
+  color: #f0c8c8;
+  background: #3a1a1a;
+}
+
+.draw-studio-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.draw-studio-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #c8c8e8;
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.draw-studio-check input {
+  accent-color: #8a8aca;
+}
+
+@media (max-width: 820px) {
+  .draw-studio {
+    padding: 10px;
+  }
+  .draw-studio-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(240px, 1fr) minmax(220px, 1fr);
+  }
+  .draw-studio-canvas-wrap {
+    border-right: none;
+    border-bottom: 1px solid #2e2e52;
+  }
+}
+

@@ -21,6 +21,7 @@ import parser
 import render
 import shape.{type Path}
 import pane_split
+import draw_studio
 
 /// Your app's public address, once you've deployed it in Problem 13, such as
 /// "https://your-username.github.io/animator/".
@@ -63,6 +64,16 @@ pub type ColorEffect {
   Cycle
   Noise
   Spiral
+  Pulse
+  Rainbow
+  Strobe
+  Aurora
+  Chase
+  Ripple
+  Scan
+  Flicker
+  Twinkle
+  Shimmer
 }
 
 // ── Model ──────────────────────────────────────────────────────────────────────
@@ -94,6 +105,16 @@ pub type Model {
     color_effect: ColorEffect,
     // True while a GIF export is encoding (disables export buttons).
     export_busy: Bool,
+    // Draw Studio overlay (freehand → Gleam).
+    studio_open: Bool,
+    studio_code: String,
+    studio_fidelity: Int,
+    studio_tool: String,
+    studio_erase_radius: Int,
+    studio_grid: Int,
+    studio_auto_close: Bool,
+    studio_mirror: Bool,
+    studio_pressure: Bool,
   )
 }
 
@@ -124,6 +145,25 @@ pub type Msg {
   ExportPng
   ExportGif
   ExportFinished
+
+  // Draw Studio (separate freehand → code window)
+  OpenDrawStudio
+  CloseDrawStudio
+  StudioCode(String)
+  StudioFidelity(Int)
+  StudioUndo
+  StudioClear
+  StudioApply
+  StudioExportPng
+  StudioSetPrimary(String)
+  StudioSetSecondary(String)
+  StudioSetEffect(ColorEffect)
+  StudioTool(String)
+  StudioEraseRadius(Int)
+  StudioGrid(Int)
+  StudioToggleAutoClose
+  StudioToggleMirror
+  StudioTogglePressure
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────────
@@ -162,6 +202,15 @@ pub fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
       secondary_color: default_secondary,
       color_effect: Static,
       export_busy: False,
+      studio_open: False,
+      studio_code: "fn draw(shape_slider: Int) -> List(Path) {\n  []\n}\n",
+      studio_fidelity: 1,
+      studio_tool: "pen",
+      studio_erase_radius: 18,
+      studio_grid: 0,
+      studio_auto_close: True,
+      studio_mirror: False,
+      studio_pressure: True,
     ),
     // Effects that happen automatically at the start go here.
     effect.batch([
@@ -182,6 +231,16 @@ fn color_effect_value(mode: ColorEffect) -> String {
     Cycle -> "cycle"
     Noise -> "noise"
     Spiral -> "spiral"
+    Pulse -> "pulse"
+    Rainbow -> "rainbow"
+    Strobe -> "strobe"
+    Aurora -> "aurora"
+    Chase -> "chase"
+    Ripple -> "ripple"
+    Scan -> "scan"
+    Flicker -> "flicker"
+    Twinkle -> "twinkle"
+    Shimmer -> "shimmer"
   }
 }
 
@@ -191,8 +250,58 @@ fn parse_color_effect(raw: String) -> ColorEffect {
     "cycle" -> Cycle
     "noise" -> Noise
     "spiral" -> Spiral
+    "pulse" -> Pulse
+    "rainbow" -> Rainbow
+    "strobe" -> Strobe
+    "aurora" -> Aurora
+    "chase" -> Chase
+    "ripple" -> Ripple
+    "scan" -> Scan
+    "flicker" -> Flicker
+    "twinkle" -> Twinkle
+    "shimmer" -> Shimmer
     _ -> Static
   }
+}
+
+fn color_effect_label(mode: ColorEffect) -> String {
+  case mode {
+    Static -> "Static"
+    Wave -> "Wave"
+    Cycle -> "Cycle"
+    Noise -> "Noise"
+    Spiral -> "Spiral"
+    Pulse -> "Pulse"
+    Rainbow -> "Rainbow"
+    Strobe -> "Strobe"
+    Aurora -> "Aurora"
+    Chase -> "Chase"
+    Ripple -> "Ripple"
+    Scan -> "Scan"
+    Flicker -> "Flicker"
+    Twinkle -> "Twinkle"
+    Shimmer -> "Shimmer"
+  }
+}
+
+fn all_color_effects() -> List(ColorEffect) {
+  [
+    Static,
+    Wave,
+    Cycle,
+    Noise,
+    Spiral,
+    Pulse,
+    Rainbow,
+    Strobe,
+    Aurora,
+    Chase,
+    Ripple,
+    Scan,
+    Flicker,
+    Twinkle,
+    Shimmer,
+  ]
 }
 
 fn editor_mode_value(mode: EditorMode) -> String {
@@ -445,6 +554,138 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
     ExportFinished -> #(Model(..model, export_busy: False), effect.none())
 
+    OpenDrawStudio -> #(
+      Model(
+        ..model,
+        studio_open: True,
+        studio_code: "fn draw(shape_slider: Int) -> List(Path) {\n  []\n}\n",
+        studio_tool: "pen",
+      ),
+      effect.batch([
+        draw_studio.mount(StudioCode),
+        draw_studio.set_palette(model.primary_color, model.secondary_color),
+        draw_studio.set_effect(color_effect_value(model.color_effect)),
+        draw_studio.set_fidelity(model.studio_fidelity),
+        draw_studio.set_tool("pen"),
+        draw_studio.set_erase_radius(model.studio_erase_radius),
+        draw_studio.set_grid(model.studio_grid),
+        draw_studio.set_auto_close(model.studio_auto_close),
+        draw_studio.set_mirror(model.studio_mirror),
+        draw_studio.set_pressure(model.studio_pressure),
+      ]),
+    )
+
+    CloseDrawStudio -> #(
+      Model(..model, studio_open: False),
+      draw_studio.unmount(),
+    )
+
+    StudioCode(code) -> #(Model(..model, studio_code: code), effect.none())
+
+    StudioFidelity(level) -> #(
+      Model(..model, studio_fidelity: level),
+      draw_studio.set_fidelity(level),
+    )
+
+    StudioUndo -> #(model, draw_studio.undo())
+
+    StudioClear -> #(model, draw_studio.clear())
+
+    StudioApply -> {
+      let code = draw_studio.get_code()
+      let drawings = set_drawing_source(model.drawings, model.selected, code)
+      data.save_library(drawings, model.selected)
+      #(
+        Model(
+          ..model,
+          studio_open: False,
+          studio_code: code,
+          source: code,
+          drawings: drawings,
+          error: None,
+        ),
+        effect.batch([draw_studio.unmount(), load_drawing(code)]),
+      )
+    }
+
+    StudioExportPng -> #(
+      model,
+      draw_studio.export_png(model.selected <> "_sketch"),
+    )
+
+    StudioSetPrimary(color) -> {
+      let model = Model(..model, primary_color: color)
+      let redraw = case run_source(model.shape_slider, model.source) {
+        Ok(paths) -> push_model_drawing(model, paths, False)
+        Error(_) -> push_model_drawing(model, [], False)
+      }
+      #(
+        model,
+        effect.batch([
+          draw_studio.set_palette(color, model.secondary_color),
+          redraw,
+        ]),
+      )
+    }
+
+    StudioSetSecondary(color) -> {
+      let model = Model(..model, secondary_color: color)
+      let redraw = case run_source(model.shape_slider, model.source) {
+        Ok(paths) -> push_model_drawing(model, paths, False)
+        Error(_) -> push_model_drawing(model, [], False)
+      }
+      #(
+        model,
+        effect.batch([
+          draw_studio.set_palette(model.primary_color, color),
+          redraw,
+        ]),
+      )
+    }
+
+    StudioSetEffect(mode) -> {
+      let model = Model(..model, color_effect: mode)
+      #(
+        model,
+        effect.batch([
+          draw_studio.set_effect(color_effect_value(mode)),
+          effect.from(fn(_dispatch) {
+            render.set_color_effect(color_effect_value(mode))
+          }),
+        ]),
+      )
+    }
+
+    StudioTool(mode) -> #(
+      Model(..model, studio_tool: mode),
+      draw_studio.set_tool(mode),
+    )
+
+    StudioEraseRadius(radius) -> #(
+      Model(..model, studio_erase_radius: radius),
+      draw_studio.set_erase_radius(radius),
+    )
+
+    StudioGrid(size) -> #(
+      Model(..model, studio_grid: size),
+      draw_studio.set_grid(size),
+    )
+
+    StudioToggleAutoClose -> {
+      let on = !model.studio_auto_close
+      #(Model(..model, studio_auto_close: on), draw_studio.set_auto_close(on))
+    }
+
+    StudioToggleMirror -> {
+      let on = !model.studio_mirror
+      #(Model(..model, studio_mirror: on), draw_studio.set_mirror(on))
+    }
+
+    StudioTogglePressure -> {
+      let on = !model.studio_pressure
+      #(Model(..model, studio_pressure: on), draw_studio.set_pressure(on))
+    }
+
     // After each keystroke in the editor, evaluate user code and draw paths.
     SetCode(text) -> {
       let drawings = set_drawing_source(model.drawings, model.selected, text)
@@ -490,6 +731,7 @@ pub fn view(model: Model) -> Element(Msg) {
       [],
     ),
     view_anim(model),
+    view_draw_studio(model),
   ])
 }
 
@@ -555,6 +797,15 @@ fn view_export_bar(model: Model) -> Element(Msg) {
     html.button(
       [
         attr.class("icon-btn export-btn"),
+        attr.attribute("title", "Open Draw Studio (mouse → Gleam)"),
+        attr.disabled(model.export_busy),
+        event.on_click(OpenDrawStudio),
+      ],
+      [html.text("Draw")],
+    ),
+    html.button(
+      [
+        attr.class("icon-btn export-btn"),
         attr.attribute("title", "Download current frame as PNG"),
         attr.disabled(model.export_busy),
         event.on_click(ExportPng),
@@ -564,11 +815,327 @@ fn view_export_bar(model: Model) -> Element(Msg) {
     html.button(
       [
         attr.class("icon-btn export-btn"),
-        attr.attribute("title", "Download animated GIF of the reveal"),
+        attr.attribute("title", "Download animated GIF of colour Effects"),
         attr.disabled(model.export_busy),
         event.on_click(ExportGif),
       ],
       [html.text(gif_label)],
+    ),
+  ])
+}
+
+fn view_draw_studio(model: Model) -> Element(Msg) {
+  case model.studio_open {
+    False -> element.none()
+    True ->
+      html.div(
+        [
+          attr.id("draw-studio-root"),
+          attr.class("draw-studio"),
+          attr.attribute("role", "dialog"),
+          attr.attribute("aria-label", "Draw Studio"),
+        ],
+        [
+          html.div([attr.class("draw-studio-window")], [
+            html.div([attr.class("draw-studio-titlebar")], [
+              html.div([attr.class("draw-studio-title")], [
+                html.text("Draw Studio"),
+                html.span([attr.class("draw-studio-sub")], [
+                  html.text(
+                    "Ink → Gleam · resample · RDP · One-Euro · pressure",
+                  ),
+                ]),
+              ]),
+              html.button(
+                [
+                  attr.class("icon-btn"),
+                  attr.attribute("title", "Close Draw Studio"),
+                  event.on_click(CloseDrawStudio),
+                ],
+                [html.text("×")],
+              ),
+            ]),
+            html.div([attr.class("draw-studio-body")], [
+              html.div([attr.class("draw-studio-canvas-wrap")], [
+                html.canvas([
+                  attr.id("draw-studio-canvas"),
+                  attr.class("draw-studio-canvas"),
+                ]),
+                html.div([attr.class("draw-studio-hint")], [
+                  html.text(case model.studio_tool {
+                    "eraser" -> "Drag to erase nearby segments"
+                    _ -> "Drag to draw · release to commit a stroke"
+                  }),
+                ]),
+              ]),
+              html.div([attr.class("draw-studio-side")], [
+                html.div([attr.class("draw-studio-side-title")], [
+                  html.text("Generated Gleam"),
+                ]),
+                html.pre([attr.class("draw-studio-code")], [
+                  html.code([], [html.text(model.studio_code)]),
+                ]),
+                html.div([attr.class("draw-studio-tools")], [
+                  view_studio_tool_row(model),
+                  html.div([attr.class("color-rows")], [
+                    view_studio_color_row(
+                      "Primary:",
+                      model.primary_color,
+                      StudioSetPrimary,
+                    ),
+                    view_studio_color_row(
+                      "Secondary:",
+                      model.secondary_color,
+                      StudioSetSecondary,
+                    ),
+                  ]),
+                  view_studio_effects(model),
+                  view_studio_fidelity(model),
+                  view_studio_grid(model),
+                  view_studio_toggles(model),
+                  html.div([attr.class("draw-studio-actions")], [
+                    html.button(
+                      [attr.class("icon-btn"), event.on_click(StudioUndo)],
+                      [html.text("Undo")],
+                    ),
+                    html.button(
+                      [attr.class("icon-btn"), event.on_click(StudioClear)],
+                      [html.text("Clear")],
+                    ),
+                    html.button(
+                      [
+                        attr.class("icon-btn"),
+                        event.on_click(StudioExportPng),
+                      ],
+                      [html.text("PNG")],
+                    ),
+                    html.button(
+                      [
+                        attr.class("icon-btn draw-studio-apply"),
+                        attr.attribute(
+                          "title",
+                          "Apply generated code to the main editor",
+                        ),
+                        event.on_click(StudioApply),
+                      ],
+                      [html.text("Apply to editor")],
+                    ),
+                  ]),
+                ]),
+              ]),
+            ]),
+          ]),
+        ],
+      )
+  }
+}
+
+fn view_studio_tool_row(model: Model) -> Element(Msg) {
+  html.div([attr.class("draw-studio-tool-block")], [
+    html.div([attr.class("draw-studio-tool-row")], [
+      html.button(
+        [
+          attr.class(case model.studio_tool == "pen" {
+            True -> "icon-btn tool-active"
+            False -> "icon-btn"
+          }),
+          attr.attribute("title", "Draw strokes"),
+          event.on_click(StudioTool("pen")),
+        ],
+        [html.text("Pen")],
+      ),
+      html.button(
+        [
+          attr.class(case model.studio_tool == "eraser" {
+            True -> "icon-btn tool-active tool-eraser"
+            False -> "icon-btn tool-eraser"
+          }),
+          attr.attribute(
+            "title",
+            "Erase segments under the brush (drag across ink)",
+          ),
+          event.on_click(StudioTool("eraser")),
+        ],
+        [html.text("Eraser")],
+      ),
+    ]),
+    case model.studio_tool == "eraser" {
+      False -> element.none()
+      True ->
+        html.label([attr.class("effect-row")], [
+          html.span([attr.class("slider-label")], [html.text("Size")]),
+          html.select(
+            [
+              attr.class("effect-select"),
+              attr.value(int.to_string(model.studio_erase_radius)),
+              event.on_change(fn(raw) {
+                case int.parse(raw) {
+                  Ok(n) -> StudioEraseRadius(n)
+                  Error(Nil) -> StudioEraseRadius(model.studio_erase_radius)
+                }
+              }),
+            ],
+            [
+              html.option(
+                [
+                  attr.value("10"),
+                  attr.selected(model.studio_erase_radius == 10),
+                ],
+                "Small",
+              ),
+              html.option(
+                [
+                  attr.value("18"),
+                  attr.selected(model.studio_erase_radius == 18),
+                ],
+                "Medium",
+              ),
+              html.option(
+                [
+                  attr.value("32"),
+                  attr.selected(model.studio_erase_radius == 32),
+                ],
+                "Large",
+              ),
+              html.option(
+                [
+                  attr.value("48"),
+                  attr.selected(model.studio_erase_radius == 48),
+                ],
+                "Huge",
+              ),
+            ],
+          ),
+        ])
+    },
+  ])
+}
+
+fn view_studio_grid(model: Model) -> Element(Msg) {
+  html.label([attr.class("effect-row")], [
+    html.span([attr.class("slider-label")], [html.text("Grid")]),
+    html.select(
+      [
+        attr.class("effect-select"),
+        attr.value(int.to_string(model.studio_grid)),
+        event.on_change(fn(raw) {
+          case int.parse(raw) {
+            Ok(n) -> StudioGrid(n)
+            Error(Nil) -> StudioGrid(model.studio_grid)
+          }
+        }),
+      ],
+      [
+        html.option(
+          [attr.value("0"), attr.selected(model.studio_grid == 0)],
+          "Off",
+        ),
+        html.option(
+          [attr.value("10"), attr.selected(model.studio_grid == 10)],
+          "10 units",
+        ),
+        html.option(
+          [attr.value("25"), attr.selected(model.studio_grid == 25)],
+          "25 units",
+        ),
+        html.option(
+          [attr.value("50"), attr.selected(model.studio_grid == 50)],
+          "50 units",
+        ),
+      ],
+    ),
+  ])
+}
+
+fn view_studio_toggles(model: Model) -> Element(Msg) {
+  html.div([attr.class("draw-studio-toggles")], [
+    html.label([attr.class("draw-studio-check")], [
+      html.input([
+        attr.type_("checkbox"),
+        attr.checked(model.studio_auto_close),
+        event.on_check(fn(_) { StudioToggleAutoClose }),
+      ]),
+      html.span([], [html.text("Auto-close")]),
+    ]),
+    html.label([attr.class("draw-studio-check")], [
+      html.input([
+        attr.type_("checkbox"),
+        attr.checked(model.studio_mirror),
+        event.on_check(fn(_) { StudioToggleMirror }),
+      ]),
+      html.span([], [html.text("Mirror H")]),
+    ]),
+    html.label([attr.class("draw-studio-check")], [
+      html.input([
+        attr.type_("checkbox"),
+        attr.checked(model.studio_pressure),
+        event.on_check(fn(_) { StudioTogglePressure }),
+      ]),
+      html.span([], [html.text("Pressure width")]),
+    ]),
+  ])
+}
+
+fn view_studio_color_row(
+  label: String,
+  value: String,
+  to_msg: fn(String) -> Msg,
+) -> Element(Msg) {
+  html.label([attr.class("color-row")], [
+    html.span([attr.class("slider-label")], [html.text(label)]),
+    html.input([
+      attr.type_("color"),
+      attr.class("color-input"),
+      attr.value(value),
+      event.on_input(to_msg),
+    ]),
+  ])
+}
+
+fn view_studio_effects(model: Model) -> Element(Msg) {
+  html.label([attr.class("effect-row")], [
+    html.span([attr.class("slider-label")], [html.text("Effects")]),
+    html.select(
+      [
+        attr.class("effect-select"),
+        attr.value(color_effect_value(model.color_effect)),
+        event.on_change(fn(raw) { StudioSetEffect(parse_color_effect(raw)) }),
+      ],
+      list.map(all_color_effects(), fn(mode) {
+        effect_option(mode, model.color_effect, color_effect_label(mode))
+      }),
+    ),
+  ])
+}
+
+fn view_studio_fidelity(model: Model) -> Element(Msg) {
+  html.label([attr.class("effect-row")], [
+    html.span([attr.class("slider-label")], [html.text("Fidelity")]),
+    html.select(
+      [
+        attr.class("effect-select"),
+        attr.value(int.to_string(model.studio_fidelity)),
+        event.on_change(fn(raw) {
+          case int.parse(raw) {
+            Ok(n) -> StudioFidelity(n)
+            Error(Nil) -> StudioFidelity(model.studio_fidelity)
+          }
+        }),
+      ],
+      [
+        html.option(
+          [attr.value("0"), attr.selected(model.studio_fidelity == 0)],
+          "Low (fewer lines)",
+        ),
+        html.option(
+          [attr.value("1"), attr.selected(model.studio_fidelity == 1)],
+          "Medium",
+        ),
+        html.option(
+          [attr.value("2"), attr.selected(model.studio_fidelity == 2)],
+          "High (more accurate)",
+        ),
+      ],
     ),
   ])
 }
@@ -684,13 +1251,9 @@ fn view_effects_row(model: Model) -> Element(Msg) {
         attr.value(color_effect_value(model.color_effect)),
         event.on_change(fn(raw) { SetColorEffect(parse_color_effect(raw)) }),
       ],
-      [
-        effect_option(Static, model.color_effect, "Static"),
-        effect_option(Wave, model.color_effect, "Wave"),
-        effect_option(Cycle, model.color_effect, "Cycle"),
-        effect_option(Noise, model.color_effect, "Noise"),
-        effect_option(Spiral, model.color_effect, "Spiral"),
-      ],
+      list.map(all_color_effects(), fn(mode) {
+        effect_option(mode, model.color_effect, color_effect_label(mode))
+      }),
     ),
   ])
 }
